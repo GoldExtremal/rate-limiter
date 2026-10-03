@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 
 from app.api import router
 from app.config import Settings
+from app.instance import InstanceIdASGI
 from app.redis_pool import create_redis_pool, warm_up_redis
 
 
@@ -36,3 +37,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = app_settings
     app.include_router(router)
     return app
+
+
+def build_asgi_app() -> InstanceIdASGI:
+    settings = Settings()
+    configure_logging(settings)
+    return InstanceIdASGI(create_app(settings), settings.instance_id)
