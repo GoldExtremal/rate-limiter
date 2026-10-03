@@ -5,7 +5,7 @@ LOAD_COMPOSE = $(COMPOSE) -f docker-compose.yml -f compose.load.yml
 ACCEPTANCE_RUNS ?= 10
 LOAD_STATS_DELAY ?= 90
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load-up load load-saturation monitoring lint-monitoring
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load-up load load-saturation monitoring lint-monitoring audit
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -66,3 +66,10 @@ load-saturation: load-up
 
 monitoring:
 	$(COMPOSE) --profile monitoring up -d --build --wait
+
+audit: test-image
+	$(TEST_RUN) sh -c "uv export --frozen --no-hashes --no-emit-project --format requirements-txt \
+		> /tmp/requirements.txt && pip-audit --strict --no-deps --disable-pip -r /tmp/requirements.txt"
+	$(COMPOSE) build app1
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image \
+		--quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 rate-limiter-app1
