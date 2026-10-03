@@ -1,0 +1,60 @@
+import secrets
+from collections.abc import Sequence
+from pathlib import Path
+
+from redis.asyncio import Redis
+
+from app.admission import Admission
+from app.decision import Decision
+
+SCRIPT_PATH = Path(__file__).parent / "lua" / "sliding_window.lua"
+MS_PER_SECOND = 1000
+KEY_PREFIX = "rl:"
+MEMBER_BYTES = 8
+
+
+def key_for(client_id: str) -> str:
+    return f"{KEY_PREFIX}{client_id}"
+
+
+def ceil_seconds(milliseconds: int) -> int:
+    return -(-milliseconds // MS_PER_SECOND)
+
+
+def decision_from_script(limit: int, reply: Sequence[int]) -> Decision:
+    allowed, remaining, free_at_ms, retry_after_ms = (int(value) for value in reply)
+    is_allowed = allowed == 1
+    return Decision(
+        allowed=is_allowed,
+        limit=limit,
+        remaining=remaining,
+        reset_at=ceil_seconds(free_at_ms),
+        retry_after=None if is_allowed else max(1, ceil_seconds(retry_after_ms)),
+    )
+
+
+class RateLimiter:
+    def __init__(
+        self,
+        redis: Redis,
+        admission: Admission,
+        *,
+        default_limit: int,
+        window_sec: int,
+    ) -> None:
+        self._script = redis.register_script(SCRIPT_PATH.read_text())
+        self._admission = admission
+        self._default_limit = default_limit
+        self._window_ms = window_sec * MS_PER_SECOND
+
+    def limit_for(self, client_id: str) -> int:
+        return self._default_limit
+
+    async def check(self, client_id: str) -> Decision:
+        limit = self.limit_for(client_id)
+        async with self._admission.slot():
+            reply = await self._script(
+                keys=[key_for(client_id)],
+                args=[limit, self._window_ms, secrets.token_hex(MEMBER_BYTES)],
+            )
+        return decision_from_script(limit, reply)

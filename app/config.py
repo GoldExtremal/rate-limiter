@@ -8,9 +8,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     redis_url: str = "redis://redis:6379/0"
+    rate_limit: int = Field(default=100, ge=0)
+    window_sec: int = Field(default=60, gt=0)
     redis_timeout_ms: int = Field(default=500, gt=0)
     redis_max_connections: int = Field(default=64, gt=0)
     instance_id: str = Field(default_factory=socket.gethostname, min_length=1)
+    protected_paths: list[str] = Field(default_factory=lambda: ["/demo"])
     log_level: str = "info"
 
     @property
