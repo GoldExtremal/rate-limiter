@@ -120,3 +120,25 @@ services:
       CHAOS_COMPOSE_PROJECT: rate-limiter
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  locust:
+    profiles: ["load"]
+    image: locustio/locust:2.46.6
+    working_dir: /mnt/locust
+    volumes:
+      - ./load:/mnt/locust
+    environment:
+      LOAD_USER_RPS: ${LOAD_USER_RPS:-10}
+    command:
+      - -f
+      - locustfile.py
+      - --headless
+      - --host=http://nginx
+      - --users=${LOAD_USERS:-150}
+      - --spawn-rate=${LOAD_SPAWN_RATE:-5}
+      - --run-time=${LOAD_RUN_TIME:-150s}
+      - --reset-stats
+      - --processes=-1
+      - --csv=reports/locust
+      - --html=reports/locust.html
+      - --only-summary
