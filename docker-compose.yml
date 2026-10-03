@@ -114,6 +114,13 @@ services:
       APP_REDIS_URL: redis://redis:6379/0
       TEST_DATABASE_URL: postgresql://ratelimiter:${POSTGRES_PASSWORD:-local-dev-only}@postgres:5432/ratelimiter_test
 
+  toxiproxy:
+    profiles: ["test"]
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ./toxiproxy.json:/config/toxiproxy.json:ro
+
   chaos:
     profiles: ["test"]
     build:
@@ -122,6 +129,11 @@ services:
     environment:
       <<: *test-environment
       CHAOS_COMPOSE_PROJECT: rate-limiter
+      TOXIPROXY_URL: http://toxiproxy:8474
+      PROXIED_REDIS_URL: redis://toxiproxy:26379/15
+      PROXIED_DATABASE_URL: postgresql://ratelimiter:${POSTGRES_PASSWORD:-local-dev-only}@toxiproxy:25432/ratelimiter_test
+    depends_on:
+      - toxiproxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
