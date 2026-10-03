@@ -26,17 +26,7 @@
 
 ## 🏗️ Архитектура
 
-```mermaid
-flowchart LR
-    C([👤 Клиент]) --> N[nginx<br/>round-robin]
-    subgraph APP [FastAPI × 2]
-        A1[app1]
-        A2[app2]
-    end
-    N --> A1 & A2
-    APP -- "Lua-скрипт, атомарно" --> R[(Redis<br/>счётчики)]
-    APP -. "снимок лимитов раз в 10 с" .-> P[(PostgreSQL<br/>лимиты клиентов)]
-```
+<p align="center"><img src="docs/images/architecture.png" alt="Клиент → nginx → app1 и app2 → Redis (счётчики) и PostgreSQL (лимиты)" width="860"></p>
 
 | | |
 | --- | --- |
@@ -89,19 +79,7 @@ curl -i localhost:8080/demo -H 'X-Client-Id: user_123'
 
 ### Один запрос
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Клиент
-    participant A as app
-    participant R as Redis
-    C->>A: POST /check {client_id}
-    A->>A: лимит клиента из снимка
-    A->>R: EVALSHA sliding_window.lua
-    Note over R: TIME → ZREMRANGEBYSCORE → ZCARD<br/>→ ZSCORE → ZADD → PEXPIRE<br/>одна атомарная операция
-    R-->>A: allowed, remaining, reset_at
-    A-->>C: 200 {"allowed": true, "remaining": 99}
-```
+<p align="center"><img src="docs/images/request.png" alt="Путь запроса POST /check: один атомарный Lua-скрипт в Redis" width="860"></p>
 
 - ⏱️ Время берётся из Redis — часы инстансов не важны.
 - 🧹 TTL по последней записи — ключ неактивного клиента исчезает сам.
@@ -110,15 +88,7 @@ sequenceDiagram
 
 ### Когда Redis болеет
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> CLOSED
-    CLOSED --> OPEN: 5 ошибок соединения подряд<br/>или ≥50% таймаутов за 10 с<br/>не меньше чем в 3 разных секундах
-    OPEN --> HALF_OPEN: через 5 с
-    HALF_OPEN --> CLOSED: проба успешна
-    HALF_OPEN --> OPEN: проба упала
-```
+<p align="center"><img src="docs/images/breaker.png" alt="Состояния circuit breaker: CLOSED, OPEN, HALF_OPEN" width="860"></p>
 
 | Ситуация | `/check` | `/demo` |
 | --- | --- | --- |
@@ -143,14 +113,10 @@ stateDiagram-v2
 | `make load` / `make load-saturation` | 📈 нагрузка: устойчивая / ступенями до насыщения |
 | `make monitoring` | 📊 Prometheus + Grafana с дашбордом и алертами |
 | `make audit` | 🔐 уязвимости зависимостей и образа |
+| `make diagrams` | 🎨 пересобрать схемы и графики из `docs/` |
 | `make down` | 🧽 остановить и удалить всё |
 
-```mermaid
-flowchart LR
-    U["🧩 unit<br/>breaker, admission,<br/>middleware"] --> I["🔗 integration<br/>реальные Redis и PostgreSQL,<br/>property-тест скрипта"]
-    I --> A["✅ acceptance<br/>500 → ровно 100<br/>на двух инстансах"]
-    A --> X["💥 chaos<br/>остановка, зависание,<br/>OOM Redis, обрыв БД"]
-```
+<p align="center"><img src="docs/images/tests.png" alt="Тесты: unit → integration → acceptance → chaos" width="860"></p>
 
 ## 📈 Нагрузка
 
@@ -176,27 +142,9 @@ flowchart LR
 
 **Поиск насыщения** (`make load-saturation`):
 
-```mermaid
-xychart-beta
-    title "Пропускная способность, RPS"
-    x-axis "Цель, RPS" [1000, 2000, 3000, 4000, 5000]
-    y-axis "RPS" 0 --> 5000
-    bar [1000, 2000, 3000, 4000, 5000]
-    line [967, 1695, 2181, 2208, 2236]
-```
+<p align="center"><img src="docs/images/throughput.png" alt="Пропускная способность: потолок около 2200 RPS" width="760"></p>
 
-*Столбцы — целевой RPS, линия — фактический.*
-
-```mermaid
-xychart-beta
-    title "Где тратится время проверки, мс"
-    x-axis "Цель, RPS" [1000, 2000, 3000, 4000, 5000]
-    y-axis "мс" 0 --> 180
-    bar [17, 33, 68, 115, 161]
-    line [16, 15, 25, 27, 27]
-```
-
-*Столбцы — вся проверка в приложении, линия — вызов Redis.*
+<p align="center"><img src="docs/images/latency.png" alt="Время проверки: вызов Redis и очередь в приложении" width="760"></p>
 
 > [!NOTE]
 > **Узкое место — CPU однопоточных инстансов, а не Redis.** Redis выполняет скрипт

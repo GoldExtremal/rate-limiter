@@ -1,0 +1,15 @@
+flowchart LR
+    unit["🧩 <b>unit</b><br/>breaker, admission,<br/>middleware, логи"]
+    integration["🔗 <b>integration</b><br/>настоящие Redis и PostgreSQL,<br/>property-тест скрипта"]
+    acceptance["✅ <b>acceptance</b><br/>500 → ровно 100<br/>на двух инстансах"]
+    chaos["💥 <b>chaos</b><br/>остановка, зависание,<br/>OOM Redis, обрыв БД"]
+    unit --> integration --> acceptance --> chaos
+
+    classDef unit fill:#E0E7FF,stroke:#4F46E5,stroke-width:2px,color:#312E81
+    classDef integration fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A
+    classDef acceptance fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D
+    classDef chaos fill:#FEE2E2,stroke:#DC2626,stroke-width:2px,color:#7F1D1D
+    class unit unit
+    class integration integration
+    class acceptance acceptance
+    class chaos chaos
