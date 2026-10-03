@@ -43,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 window_sec=app_settings.breaker_window_sec,
                 min_calls=app_settings.breaker_min_calls,
                 failure_ratio=app_settings.breaker_failure_ratio,
+                min_failure_seconds=app_settings.breaker_min_failure_seconds,
             ),
             metrics,
             window_sec=app_settings.window_sec,

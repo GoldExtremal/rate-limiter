@@ -109,6 +109,7 @@ def ratio_breaker(clock: FakeClock) -> CircuitBreaker:
         window_sec=10,
         min_calls=10,
         failure_ratio=0.5,
+        min_failure_seconds=3,
         clock=clock,
     )
 
@@ -122,13 +123,23 @@ def test_timeouts_do_not_trip_consecutive_rule() -> None:
 
 
 def test_timeouts_open_breaker_by_failure_ratio() -> None:
-    breaker = ratio_breaker(FakeClock())
+    clock = FakeClock()
+    breaker = ratio_breaker(clock)
     for _ in range(5):
         breaker.record_success()
-    for _ in range(5):
+    for _ in range(6):
         breaker.record_failure(definite=False)
+        clock.advance(0.5)
 
     assert breaker.state is BreakerState.OPEN
+
+
+def test_burst_of_timeouts_within_one_second_keeps_breaker_closed() -> None:
+    breaker = ratio_breaker(FakeClock())
+    for _ in range(200):
+        breaker.record_failure(definite=False)
+
+    assert breaker.state is BreakerState.CLOSED
 
 
 def test_sporadic_timeouts_under_load_keep_breaker_closed() -> None:

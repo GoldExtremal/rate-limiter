@@ -71,19 +71,22 @@ async def test_hung_redis_is_bounded_by_timeouts(
         await app.post("/check", json={"client_id": unique_id("warm")})
         await toxiproxy.add_toxic("redis", "timeout", timeout=0)
         durations, bodies = [], []
-        for _ in range(8):
+        for _ in range(16):
             started = time.monotonic()
             response = await app.post("/check", json={"client_id": unique_id("hang")})
             durations.append(time.monotonic() - started)
             bodies.append(response.json())
         health = (await app.get("/health")).json()
 
-    assert [body["degraded"] for body in bodies[:3]] == ["redis_timeout"] * 3
-    assert all(body["allowed"] is False for body in bodies[:3])
-    assert all(body["degraded"] == "redis_unavailable" for body in bodies[3:])
-    assert all(body["allowed"] is True for body in bodies[3:])
-    assert all(duration < 1.0 for duration in durations[:4])
-    assert all(duration < 0.1 for duration in durations[4:])
+    degraded = [body["degraded"] for body in bodies]
+    opened_at = degraded.index("redis_unavailable")
+    assert opened_at >= 3
+    assert degraded[:opened_at] == ["redis_timeout"] * opened_at
+    assert all(body["allowed"] is False for body in bodies[:opened_at])
+    assert all(duration < 1.0 for duration in durations[: opened_at + 1])
+    assert degraded[opened_at:] == ["redis_unavailable"] * (len(bodies) - opened_at)
+    assert all(body["allowed"] is True for body in bodies[opened_at:])
+    assert all(duration < 0.1 for duration in durations[opened_at + 1 :])
     assert health["breaker"] == "open"
 
 
