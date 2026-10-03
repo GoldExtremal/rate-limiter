@@ -3,12 +3,13 @@
 Распределённый ограничитель частоты запросов: лимит на `client_id` (по умолчанию
 100 запросов за скользящие 60 секунд), общий для нескольких инстансов FastAPI за
 балансировщиком. Счётчики живут только в Redis, проверка и списание выполняются
-одним Lua-скриптом.
+одним Lua-скриптом. Индивидуальные лимиты клиентов хранятся в PostgreSQL.
 
 ```text
 клиент → nginx :8080 (round-robin)
            ├── app1 (127.0.0.1:8001) ┐
-           └── app2 (127.0.0.1:8002) ┴─→ Redis
+           └── app2 (127.0.0.1:8002) ┴─→ Redis       счётчики
+                                     └─→ PostgreSQL  лимиты клиентов, читаются на старте
 ```
 
 ## Запуск
@@ -25,7 +26,8 @@ docker compose up --build
 | app1 | `http://127.0.0.1:8001` | инстанс напрямую |
 | app2 | `http://127.0.0.1:8002` | инстанс напрямую |
 
-Redis наружу не публикуется. Все внешние порты настраиваются через `APP_PORT`,
+Миграции PostgreSQL применяются автоматически: одноразовый сервис `migrate`
+отрабатывает до старта инстансов. Redis и PostgreSQL наружу не публикуются. Все внешние порты настраиваются через `APP_PORT`,
 `APP1_PORT`, `APP2_PORT`; `.env` не обязателен — значения по умолчанию заданы в
 `docker-compose.yml`, полный список переменных — в `.env.example`.
 
@@ -81,7 +83,7 @@ make check
 | `make up` / `make down` | поднять стенд и дождаться healthcheck / остановить и удалить данные |
 | `make lint`, `make typecheck` | ruff и mypy |
 | `make test-unit` | unit-тесты без внешних сервисов |
-| `make test-integration` | приложение in-process против настоящего Redis |
+| `make test-integration` | приложение in-process против настоящих Redis и PostgreSQL |
 | `make test-acceptance` | поднятые app1 и app2 через nginx и напрямую |
 | `make test-acceptance-repeat` | приёмочные тесты 10 раз подряд |
 | `make test` | все тесты, включая медленный тест восстановления после окна |
@@ -146,6 +148,38 @@ Redis исполняет скрипт целиком в однопоточном
 - Память: sorted set до 128 элементов с короткими members хранится в компактной
   кодировке listpack, при лимите 100 это единицы килобайт на активного клиента.
 
+### Индивидуальные лимиты в PostgreSQL
+
+Задание называет PostgreSQL обязательной частью стека, но не говорит, что в нём
+хранить. Принятое прочтение: Postgres — источник конфигурации индивидуальных
+лимитов, то есть данных, которые меняют без передеплоя и которые должны быть
+одинаковыми на всех инстансах. Счётчики по-прежнему только в Redis.
+
+- Таблица `client_limits (client_id, rate_limit, updated_at)`; клиенты без строки
+  получают `RATE_LIMIT`. `rate_limit = 0` блокирует клиента.
+- Миграции — SQL-файлы в `migrations/`, свой runner на `asyncpg` с
+  `pg_advisory_lock` (безопасен при параллельном запуске) и таблицей
+  `schema_migrations`. Alembic потребовал бы SQLAlchemy ради одной таблицы.
+- Seed из `SEED_CLIENT_LIMITS` (по умолчанию `client-a: 500`, `client-b: 50`,
+  `client-c: 1000`) выполняется при каждом `up` с `ON CONFLICT DO NOTHING`:
+  ручные правки в базе не откатываются.
+- Каждый инстанс читает таблицу один раз на старте в неизменяемый снимок в
+  памяти; горячий путь в Postgres не ходит. Если база недоступна, инстанс
+  стартует со значениями по умолчанию и пишет warning, `/health` показывает
+  `limits_loaded: false`.
+
+Изменить лимит:
+
+```bash
+docker compose exec postgres psql -U ratelimiter -d ratelimiter \
+  -c "INSERT INTO client_limits (client_id, rate_limit) VALUES ('user_123', 10)
+      ON CONFLICT (client_id) DO UPDATE SET rate_limit = EXCLUDED.rate_limit, updated_at = now()"
+docker compose restart app1 app2
+```
+
+Новый лимит применяется после рестарта инстансов; история запросов клиента в
+Redis при этом сохраняется, потому что лимит не входит в ключ.
+
 ### Инстансы, пул и балансировщик
 
 - Пул соединений Redis создаётся в lifespan и закрывается на shutdown. На старте
@@ -154,6 +188,9 @@ Redis исполняет скрипт целиком в однопоточном
   всплеске запросов пул исчерпывается и redis-py бросает ошибку при живом Redis.
 - nginx не повторяет `/check` и `/demo` на другом инстансе
   (`proxy_next_upstream off`): иначе один запрос клиента мог бы списаться дважды.
+  Чтобы без повторов не было 502 после пересоздания контейнеров, nginx заново
+  резолвит `app1`/`app2` через DNS Docker (`resolve`), а keepalive-таймаут
+  uvicorn больше, чем у nginx.
 - `X-Instance-Id` ставит внешняя ASGI-обёртка вокруг всего приложения — так
   заголовок есть даже на необработанном 500.
 - `RateLimitMiddleware` — чистый ASGI, а не `BaseHTTPMiddleware`; `X-Client-Id`
@@ -167,6 +204,10 @@ Redis исполняет скрипт целиком в однопоточном
 | `RATE_LIMIT` | `100` | лимит по умолчанию |
 | `WINDOW_SEC` | `60` | размер окна |
 | `REDIS_URL` | `redis://redis:6379/0` | адрес Redis |
+| `DATABASE_URL` | `postgresql://ratelimiter:local-dev-only@postgres:5432/ratelimiter` | адрес PostgreSQL |
+| `LIMITS_QUERY_TIMEOUT_MS` | `1000` | таймаут загрузки лимитов на старте |
+| `POSTGRES_PASSWORD` | `local-dev-only` | пароль PostgreSQL в compose |
+| `SEED_CLIENT_LIMITS` | см. `.env.example` | начальные индивидуальные лимиты |
 | `REDIS_TIMEOUT_MS` | `500` | таймаут соединения и ответа Redis |
 | `REDIS_MAX_CONNECTIONS` | `64` | размер пула и число одновременных обращений |
 | `PROTECTED_PATHS` | `["/demo"]` | пути под `RateLimitMiddleware` |
