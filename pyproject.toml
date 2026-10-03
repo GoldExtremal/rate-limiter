@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "asgi-lifespan>=2.1",
     "asyncpg-stubs>=0.31.3",
+    "docker>=7.1",
     "httpx>=0.28",
     "mypy>=1.13",
     "pytest>=8.3",

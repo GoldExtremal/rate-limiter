@@ -103,9 +103,20 @@ services:
     build:
       context: .
       target: test
-    environment:
+    environment: &test-environment
       NGINX_URL: http://nginx
       APP_URLS: http://app1:8000,http://app2:8000
       TEST_REDIS_URL: redis://redis:6379/15
       APP_REDIS_URL: redis://redis:6379/0
       TEST_DATABASE_URL: postgresql://ratelimiter:${POSTGRES_PASSWORD:-local-dev-only}@postgres:5432/ratelimiter_test
+
+  chaos:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    environment:
+      <<: *test-environment
+      CHAOS_COMPOSE_PROJECT: rate-limiter
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
