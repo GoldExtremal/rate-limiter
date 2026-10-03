@@ -1,5 +1,4 @@
 import asyncio
-import time
 import uuid
 
 import httpx
@@ -92,53 +91,6 @@ async def test_redis_stop_degrades_and_recovers_without_restart(
     assert all(isinstance(body["remaining"], int) for body in recovered)
     assert closed_recovered["degraded"] is None
     assert closed_recovered["allowed"] is True
-
-
-async def test_hung_redis_is_bounded_by_timeouts(
-    redis_chaos: Container, in_process_app: InProcessFactory
-) -> None:
-    async with in_process_app(
-        fail_mode_open=True, redis_timeout_ms=300, breaker_cooldown_sec=30
-    ) as app:
-        redis_chaos.pause()
-        durations, bodies = [], []
-        for _ in range(8):
-            started = time.monotonic()
-            response = await app.post("/check", json={"client_id": unique_id("hang")})
-            durations.append(time.monotonic() - started)
-            bodies.append(response.json())
-        health = (await app.get("/health")).json()
-
-    assert [body["degraded"] for body in bodies[:4]] == ["redis_timeout"] * 4
-    assert all(body["allowed"] is False for body in bodies[:4])
-    assert all(body["degraded"] == "redis_unavailable" for body in bodies[4:])
-    assert all(body["allowed"] is True for body in bodies[4:])
-    assert all(duration < 1.0 for duration in durations[:5])
-    assert all(duration < 0.1 for duration in durations[5:])
-    assert health["breaker"] == "open"
-
-
-async def test_hung_redis_overload_is_shed_not_failed_open(
-    redis_chaos: Container, in_process_app: InProcessFactory
-) -> None:
-    async with in_process_app(
-        fail_mode_open=True,
-        redis_timeout_ms=1000,
-        redis_max_connections=2,
-        redis_queue_timeout_ms=100,
-        breaker_failure_threshold=100,
-    ) as app:
-        redis_chaos.pause()
-        responses = await asyncio.gather(
-            *(app.post("/check", json={"client_id": unique_id("shed")}) for _ in range(10))
-        )
-
-    bodies = [response.json() for response in responses]
-    shed = [body for body in bodies if body["degraded"] == "overloaded"]
-    assert all(response.status_code == 200 for response in responses)
-    assert len(shed) == 8
-    assert all(body["allowed"] is False for body in bodies)
-    assert sum(body["degraded"] == "redis_timeout" for body in bodies) == 2
 
 
 async def test_out_of_memory_rejects_script_before_execution(

@@ -23,6 +23,7 @@ async def health(request: Request) -> dict[str, object]:
         "breaker": limiter.breaker.state.name.lower(),
         "limits_loaded": limits.loaded,
         "limits_count": limits.count,
+        "limits_snapshot_age_sec": limits.snapshot_age_sec(),
     }
 
 

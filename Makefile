@@ -4,7 +4,7 @@ CHAOS_RUN = $(COMPOSE) --profile test run --rm chaos
 ACCEPTANCE_RUNS ?= 10
 LOAD_STATS_DELAY ?= 90
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load load-saturation
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -49,3 +49,9 @@ load: up
 	docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep -E "NAME|rate-limiter" > load/reports/docker-stats.txt; \
 	wait
 	cat load/reports/docker-stats.txt load/reports/app-metrics.txt
+
+load-saturation: up
+	mkdir -p load/reports
+	$(COMPOSE) --profile load run --rm locust -f saturation.py --headless --host=http://nginx \
+		--processes=-1 --csv=reports/saturation --only-summary
+	cat load/reports/saturation.txt

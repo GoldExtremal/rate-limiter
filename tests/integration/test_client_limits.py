@@ -51,3 +51,20 @@ async def test_individual_limits_from_postgres_are_applied(
     assert health["limits_loaded"] is True
     assert health["limits_count"] == 2
     assert (vip, blocked, regular) == (5, 0, 2)
+
+
+async def test_changed_limit_is_picked_up_without_restart(
+    app_client: ClientFactory, database: asyncpg.Connection
+) -> None:
+    await seed_client_limits(database, {"tenant": 1})
+
+    async with app_client(rate_limit=10, limits_refresh_sec=0.2) as client:
+        before = await allowed_count(client, "tenant", 3)
+        await database.execute("UPDATE client_limits SET rate_limit = 3 WHERE client_id = 'tenant'")
+        await asyncio.sleep(0.6)
+        after = await allowed_count(client, "tenant", 3)
+        health = (await client.get("/health")).json()
+
+    assert before == 1
+    assert after == 2
+    assert health["limits_snapshot_age_sec"] < 0.5

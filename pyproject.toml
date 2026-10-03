@@ -46,6 +46,4 @@ markers = ["slow: тесты, ждущие полное окно 60 с"]
 [tool.mypy]
 python_version = "3.12"
 files = ["app"]
-disallow_untyped_defs = true
-check_untyped_defs = true
-warn_unused_ignores = true
+strict = true

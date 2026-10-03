@@ -59,6 +59,16 @@ class Metrics:
             "1 if client limits were loaded from PostgreSQL",
             registry=self.registry,
         )
+        self.limits_snapshot_age = Gauge(
+            "ratelimit_limits_snapshot_age_seconds",
+            "Seconds since client limits were last loaded, -1 if never",
+            registry=self.registry,
+        )
+        self.limits_refresh_errors = Counter(
+            "ratelimit_limits_refresh_errors",
+            "Failed attempts to reload client limits from PostgreSQL",
+            registry=self.registry,
+        )
 
     def record(self, decision: Decision, duration_sec: float) -> None:
         self.decisions.labels(outcome_of(decision)).inc()

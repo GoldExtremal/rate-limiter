@@ -80,10 +80,10 @@ async def test_single_timeout_is_rejected_not_failed_open(
     assert decision.retry_after == 1
 
 
-async def test_consecutive_timeouts_open_breaker_and_then_fail_open() -> None:
+async def test_timeouts_open_breaker_by_ratio_and_then_fail_open() -> None:
     script = FakeScript()
     script.error = RedisTimeoutError("timeout")
-    breaker = CircuitBreaker(failure_threshold=3, cooldown_sec=5)
+    breaker = CircuitBreaker(failure_threshold=100, cooldown_sec=5, min_calls=3)
     limiter = build_limiter(script, breaker=breaker, fail_mode_open=True)
 
     decisions = [await limiter.check("client") for _ in range(5)]
