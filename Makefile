@@ -1,0 +1,37 @@
+COMPOSE ?= docker compose
+TEST_RUN = $(COMPOSE) --profile test run --rm tests
+ACCEPTANCE_RUNS ?= 10
+
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test check
+
+up:
+	$(COMPOSE) up -d --build --wait
+
+down:
+	$(COMPOSE) --profile test --profile load down -v --remove-orphans
+
+test-image:
+	$(COMPOSE) --profile test build tests
+
+lint: test-image
+	$(TEST_RUN) sh -c "ruff check . && ruff format --check ."
+
+typecheck: test-image
+	$(TEST_RUN) mypy
+
+test-unit: test-image
+	$(TEST_RUN) pytest tests/unit
+
+test-integration: test-image up
+	$(TEST_RUN) pytest tests/integration
+
+test-acceptance: test-image up
+	$(TEST_RUN) pytest tests/acceptance -m "not slow"
+
+test-acceptance-repeat: test-image up
+	for run in $$(seq $(ACCEPTANCE_RUNS)); do $(TEST_RUN) pytest -q tests/acceptance -m "not slow" || exit 1; done
+
+test: test-image up
+	$(TEST_RUN) pytest tests/unit tests/integration tests/acceptance
+
+check: lint typecheck test

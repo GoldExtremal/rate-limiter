@@ -1,0 +1,46 @@
+[project]
+name = "rate-limiter"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic-settings>=2.6",
+    "redis[hiredis]>=5.2",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1",
+    "httpx>=0.28",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["slow: тесты, ждущие полное окно 60 с"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
