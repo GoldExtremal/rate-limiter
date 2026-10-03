@@ -13,6 +13,7 @@ COPY pyproject.toml uv.lock ./
 FROM base AS runtime
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
+COPY migrations ./migrations
 RUN useradd --system --uid 10001 --no-create-home app
 USER app
 EXPOSE 8000
