@@ -27,6 +27,7 @@ class CircuitBreaker:
         window_sec: int = 10,
         min_calls: int = 10,
         failure_ratio: float = 0.5,
+        min_failure_seconds: int = 3,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._failure_threshold = failure_threshold
@@ -34,6 +35,7 @@ class CircuitBreaker:
         self._window_sec = window_sec
         self._min_calls = min_calls
         self._failure_ratio = failure_ratio
+        self._min_failure_seconds = min_failure_seconds
         self._clock = clock
         self._buckets = [SecondBucket() for _ in range(window_sec)]
         self._state = BreakerState.CLOSED
@@ -101,7 +103,12 @@ class CircuitBreaker:
         recent = [bucket for bucket in self._buckets if bucket.second >= oldest_second]
         calls = sum(bucket.calls for bucket in recent)
         failures = sum(bucket.failures for bucket in recent)
-        return calls >= self._min_calls and failures >= calls * self._failure_ratio
+        failing_seconds = sum(1 for bucket in recent if bucket.failures)
+        return (
+            calls >= self._min_calls
+            and failures >= calls * self._failure_ratio
+            and failing_seconds >= self._min_failure_seconds
+        )
 
     def _current_bucket(self) -> SecondBucket:
         second = int(self._clock())

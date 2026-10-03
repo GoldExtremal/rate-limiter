@@ -1,0 +1,13 @@
+sequenceDiagram
+    autonumber
+    participant C as 👤 Клиент
+    participant A as ⚙️ app
+    participant R as ⚡ Redis
+    C->>A: POST /check {client_id}
+    A->>A: лимит клиента из снимка
+    A->>R: EVALSHA sliding_window.lua
+    rect rgb(254, 242, 242)
+        Note over R: TIME → ZREMRANGEBYSCORE → ZCARD<br/>→ ZSCORE → ZADD → PEXPIRE<br/>одна атомарная операция
+    end
+    R-->>A: allowed, remaining, reset_at
+    A-->>C: 200 {"allowed": true, "remaining": 99}

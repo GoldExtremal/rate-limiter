@@ -26,6 +26,6 @@ async def warm_up_redis(redis: Redis, timeout_sec: float) -> bool:
         async with asyncio.timeout(timeout_sec):
             await redis.ping()
     except (RedisConnectionError, RedisTimeoutError, TimeoutError, OSError) as error:
-        logger.warning("redis is unavailable on startup: %s", type(error).__name__)
+        logger.warning("redis is unavailable on startup", extra={"error": type(error).__name__})
         return False
     return True

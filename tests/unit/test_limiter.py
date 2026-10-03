@@ -94,7 +94,9 @@ async def test_single_timeout_is_rejected_not_failed_open(
 async def test_timeouts_open_breaker_by_ratio_and_then_fail_open() -> None:
     script = FakeScript()
     script.error = RedisTimeoutError("timeout")
-    breaker = CircuitBreaker(failure_threshold=100, cooldown_sec=5, min_calls=3)
+    breaker = CircuitBreaker(
+        failure_threshold=100, cooldown_sec=5, min_calls=3, min_failure_seconds=1
+    )
     limiter = build_limiter(script, breaker=breaker, fail_mode_open=True)
 
     decisions = [await limiter.check("client") for _ in range(5)]
@@ -189,3 +191,18 @@ async def test_overload_never_fails_open(fail_mode_open: bool) -> None:
     assert decision.degraded is DegradedReason.OVERLOADED
     assert decision.retry_after == 1
     assert breaker.state is BreakerState.CLOSED
+
+
+async def test_breaker_transitions_are_logged_once(caplog: pytest.LogCaptureFixture) -> None:
+    script = FakeScript()
+    script.error = RedisConnectionError("refused")
+    breaker = CircuitBreaker(failure_threshold=3, cooldown_sec=5)
+    limiter = build_limiter(script, breaker=breaker)
+
+    with caplog.at_level("DEBUG", logger="app.limiter"):
+        for _ in range(10):
+            await limiter.check("client")
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert [r.getMessage() for r in warnings] == ["circuit breaker state changed"]
+    assert (warnings[0].from_state, warnings[0].to_state) == ("closed", "open")

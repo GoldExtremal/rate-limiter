@@ -1,0 +1,14 @@
+stateDiagram-v2
+    direction LR
+    [*] --> CLOSED
+    CLOSED --> OPEN: 5 ошибок связи подряд<br/>или ≥ 50 % таймаутов<br/>в 3+ секундах из 10
+    OPEN --> HALF_OPEN: через 5 с
+    HALF_OPEN --> CLOSED: проба успешна
+    HALF_OPEN --> OPEN: проба упала
+
+    classDef healthy fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D
+    classDef broken fill:#FEE2E2,stroke:#DC2626,stroke-width:2px,color:#7F1D1D
+    classDef probing fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F
+    class CLOSED healthy
+    class OPEN broken
+    class HALF_OPEN probing

@@ -1,4 +1,5 @@
 import socket
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,9 +23,11 @@ class Settings(BaseSettings):
     breaker_window_sec: int = Field(default=10, gt=0)
     breaker_min_calls: int = Field(default=10, gt=0)
     breaker_failure_ratio: float = Field(default=0.5, gt=0, le=1)
+    breaker_min_failure_seconds: int = Field(default=3, gt=0)
     instance_id: str = Field(default_factory=socket.gethostname, min_length=1)
     protected_paths: list[str] = Field(default_factory=lambda: ["/demo"])
     log_level: str = "info"
+    log_format: Literal["json", "text"] = "json"
 
     @property
     def limits_query_timeout_sec(self) -> float:

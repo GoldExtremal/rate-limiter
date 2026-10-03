@@ -58,7 +58,7 @@ async def load_limits(database_url: str, timeout_sec: float) -> dict[str, int] |
         async with asyncio.timeout(timeout_sec):
             return await fetch_limits(database_url)
     except (OSError, TimeoutError, asyncpg.PostgresError, asyncpg.InterfaceError) as error:
-        logger.warning("client limits are unavailable: %s", type(error).__name__)
+        logger.warning("client limits are unavailable", extra={"error": type(error).__name__})
         return None
 
 

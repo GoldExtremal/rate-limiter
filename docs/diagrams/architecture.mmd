@@ -1,0 +1,28 @@
+flowchart LR
+    client([👤 Клиент])
+    nginx["🌐 nginx<br/>round-robin"]
+    subgraph apps ["⚙️ FastAPI × 2"]
+        direction TB
+        app1["app1"]
+        app2["app2"]
+    end
+    redis[("⚡ Redis<br/>счётчики<br/>sliding window")]
+    pg[("🐘 PostgreSQL<br/>лимиты клиентов")]
+
+    client --> nginx
+    nginx --> app1
+    nginx --> app2
+    apps == "Lua-скрипт · атомарно" ==> redis
+    apps -. "лимиты раз в 10 с" .-> pg
+
+    classDef client fill:#F1F5F9,stroke:#64748B,stroke-width:2px,color:#0F172A
+    classDef proxy fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D
+    classDef app fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A
+    classDef redis fill:#FEE2E2,stroke:#DC2626,stroke-width:2px,color:#7F1D1D
+    classDef pg fill:#E0E7FF,stroke:#4F46E5,stroke-width:2px,color:#312E81
+    class client client
+    class nginx proxy
+    class app1,app2 app
+    class redis redis
+    class pg pg
+    style apps fill:#F8FAFC,stroke:#94A3B8,stroke-width:2px,stroke-dasharray:6 4

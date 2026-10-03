@@ -5,7 +5,7 @@ LOAD_COMPOSE = $(COMPOSE) -f docker-compose.yml -f compose.load.yml
 ACCEPTANCE_RUNS ?= 10
 LOAD_STATS_DELAY ?= 90
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load-up load load-saturation monitoring lint-monitoring audit
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load-up load load-saturation monitoring lint-monitoring audit diagrams
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -73,3 +73,12 @@ audit: test-image
 	$(COMPOSE) build app1
 	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image \
 		--quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 rate-limiter-app1
+
+diagrams:
+	for name in architecture request breaker tests; do \
+		docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)/docs:/data" minlag/mermaid-cli:11.4.2 \
+			-i /data/diagrams/$$name.mmd -o /data/images/$$name.png \
+			-c /data/diagrams/mermaid.json -b white -s 2 || exit 1; \
+	done
+	docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp -v "$(CURDIR)/docs:/docs" -w /docs python:3.12-slim \
+		sh -c "pip install -q --user --disable-pip-version-check --no-warn-script-location matplotlib==3.10.9 && python charts.py"

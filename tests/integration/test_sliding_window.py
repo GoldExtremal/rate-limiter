@@ -126,7 +126,10 @@ async def test_key_of_inactive_client_disappears(app_client: ClientFactory, redi
 
 
 async def test_concurrent_checks_never_exceed_limit(app_client: ClientFactory) -> None:
-    async with app_client(rate_limit=100) as client:
+    async with app_client(
+        rate_limit=100, redis_timeout_ms=10_000, redis_queue_timeout_ms=10_000
+    ) as client:
         bodies = await asyncio.gather(*(check(client, "judy") for _ in range(300)))
 
+    assert all(body["degraded"] is None for body in bodies)
     assert sum(body["allowed"] is True for body in bodies) == 100

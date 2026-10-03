@@ -133,7 +133,10 @@ class RateLimiter:
         return decision
 
     async def _check_in_redis(self, client_id: str, limit: int, member: str) -> Decision:
-        if not self.breaker.allow_request():
+        state_before = self.breaker.state
+        allowed = self.breaker.allow_request()
+        self._log_breaker_transition(state_before)
+        if not allowed:
             return self.unavailable_decision()
         is_probe = self.breaker.state is BreakerState.HALF_OPEN
         try:
@@ -144,9 +147,11 @@ class RateLimiter:
                 )
         except REDIS_UNAVAILABLE_ERRORS as error:
             kind = classify_redis_error(error)
+            state_before = self.breaker.state
             self.breaker.record_failure(definite=kind != "timeout")
+            self._log_breaker_transition(state_before)
             self.metrics.redis_errors.labels(kind).inc()
-            logger.warning("redis is unavailable: %s", kind)
+            logger.debug("redis call failed", extra={"kind": kind})
             if kind == "timeout" and self.breaker.state is not BreakerState.OPEN:
                 return timeout_decision()
             return self.unavailable_decision()
@@ -160,8 +165,21 @@ class RateLimiter:
             if is_probe:
                 self.breaker.release_probe()
             raise
+        state_before = self.breaker.state
         self.breaker.record_success()
+        self._log_breaker_transition(state_before)
         return decision_from_script(limit, reply)
+
+    def _log_breaker_transition(self, state_before: BreakerState) -> None:
+        state_after = self.breaker.state
+        if state_after is not state_before:
+            logger.warning(
+                "circuit breaker state changed",
+                extra={
+                    "from_state": state_before.name.lower(),
+                    "to_state": state_after.name.lower(),
+                },
+            )
 
     def unavailable_decision(self) -> Decision:
         return Decision(
