@@ -8,7 +8,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import OutOfMemoryError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from app.admission import Admission
+from app.admission import Admission, AdmissionTimeout
 from app.decision import Decision, DegradedReason
 from app.limits import LimitsProvider
 
@@ -58,6 +58,17 @@ def decision_from_script(limit: int, reply: Sequence[int]) -> Decision:
     )
 
 
+def overloaded_decision() -> Decision:
+    return Decision(
+        allowed=False,
+        limit=None,
+        remaining=None,
+        reset_at=None,
+        retry_after=1,
+        degraded=DegradedReason.OVERLOADED,
+    )
+
+
 class RateLimiter:
     def __init__(
         self,
@@ -76,15 +87,21 @@ class RateLimiter:
 
     async def check(self, client_id: str) -> Decision:
         limit = self.limits.get(client_id)
-        async with self._admission.slot():
-            try:
-                reply = await self._script(
-                    keys=[key_for(client_id)],
-                    args=[limit, self._window_ms, secrets.token_hex(MEMBER_BYTES)],
-                )
-            except REDIS_UNAVAILABLE_ERRORS as error:
-                logger.warning("redis is unavailable: %s", classify_redis_error(error))
-                return self.unavailable_decision()
+        try:
+            async with self._admission.slot():
+                return await self._check_in_redis(client_id, limit)
+        except AdmissionTimeout:
+            return overloaded_decision()
+
+    async def _check_in_redis(self, client_id: str, limit: int) -> Decision:
+        try:
+            reply = await self._script(
+                keys=[key_for(client_id)],
+                args=[limit, self._window_ms, secrets.token_hex(MEMBER_BYTES)],
+            )
+        except REDIS_UNAVAILABLE_ERRORS as error:
+            logger.warning("redis is unavailable: %s", classify_redis_error(error))
+            return self.unavailable_decision()
         return decision_from_script(limit, reply)
 
     def unavailable_decision(self) -> Decision:

@@ -33,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         limits = await load_limits(app_settings.database_url, app_settings.limits_query_timeout_sec)
         app.state.limiter = RateLimiter(
             redis,
-            Admission(app_settings.redis_max_connections),
+            Admission(app_settings.redis_max_connections, app_settings.redis_queue_timeout_sec),
             LimitsProvider(app_settings.rate_limit, limits),
             window_sec=app_settings.window_sec,
             fail_mode_open=app_settings.fail_mode_open,
