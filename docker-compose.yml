@@ -7,8 +7,12 @@ x-app-environment: &app-environment
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   RATE_LIMIT: ${RATE_LIMIT:-100}
   WINDOW_SEC: ${WINDOW_SEC:-60}
+  FAIL_MODE_OPEN: ${FAIL_MODE_OPEN:-true}
   REDIS_TIMEOUT_MS: ${REDIS_TIMEOUT_MS:-500}
   REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-64}
+  REDIS_QUEUE_TIMEOUT_MS: ${REDIS_QUEUE_TIMEOUT_MS:-1000}
+  BREAKER_FAILURE_THRESHOLD: ${BREAKER_FAILURE_THRESHOLD:-5}
+  BREAKER_COOLDOWN_SEC: ${BREAKER_COOLDOWN_SEC:-5}
   LIMITS_QUERY_TIMEOUT_MS: ${LIMITS_QUERY_TIMEOUT_MS:-1000}
   PROTECTED_PATHS: '["/demo"]'
   LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -99,9 +103,20 @@ services:
     build:
       context: .
       target: test
-    environment:
+    environment: &test-environment
       NGINX_URL: http://nginx
       APP_URLS: http://app1:8000,http://app2:8000
       TEST_REDIS_URL: redis://redis:6379/15
       APP_REDIS_URL: redis://redis:6379/0
       TEST_DATABASE_URL: postgresql://ratelimiter:${POSTGRES_PASSWORD:-local-dev-only}@postgres:5432/ratelimiter_test
+
+  chaos:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    environment:
+      <<: *test-environment
+      CHAOS_COMPOSE_PROJECT: rate-limiter
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

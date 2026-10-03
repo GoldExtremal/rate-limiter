@@ -71,12 +71,12 @@ async def database() -> AsyncIterator[asyncpg.Connection]:
 @pytest.fixture
 def app_client(redis: Redis, database: asyncpg.Connection) -> ClientFactory:
     def factory(**overrides: Any) -> AbstractAsyncContextManager[httpx.AsyncClient]:
-        settings = Settings(
-            redis_url=TEST_REDIS_URL,
-            database_url=TEST_DATABASE_URL,
-            instance_id="test",
-            **overrides,
-        )
+        defaults: dict[str, Any] = {
+            "redis_url": TEST_REDIS_URL,
+            "database_url": TEST_DATABASE_URL,
+            "instance_id": "test",
+        }
+        settings = Settings(**(defaults | overrides))
         return running_client(settings)
 
     return factory

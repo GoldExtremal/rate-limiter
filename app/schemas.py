@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.decision import DegradedReason
+
 CLIENT_ID_MAX_LENGTH = 256
 
 
@@ -11,3 +13,4 @@ class CheckResponse(BaseModel):
     allowed: bool
     remaining: int | None
     reset_at: int | None
+    degraded: DegradedReason | None

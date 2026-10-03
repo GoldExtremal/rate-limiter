@@ -1,8 +1,9 @@
 COMPOSE ?= docker compose
 TEST_RUN = $(COMPOSE) --profile test run --rm tests
+CHAOS_RUN = $(COMPOSE) --profile test run --rm chaos
 ACCEPTANCE_RUNS ?= 10
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test check
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -11,7 +12,7 @@ down:
 	$(COMPOSE) --profile test --profile load down -v --remove-orphans
 
 test-image:
-	$(COMPOSE) --profile test build tests
+	$(COMPOSE) --profile test build tests chaos
 
 lint: test-image
 	$(TEST_RUN) sh -c "ruff check . && ruff format --check ."
@@ -31,7 +32,11 @@ test-acceptance: test-image up
 test-acceptance-repeat: test-image up
 	for run in $$(seq $(ACCEPTANCE_RUNS)); do $(TEST_RUN) pytest -q tests/acceptance -m "not slow" || exit 1; done
 
+test-chaos: test-image up
+	$(CHAOS_RUN) pytest tests/chaos
+
 test: test-image up
 	$(TEST_RUN) pytest tests/unit tests/integration tests/acceptance
+	$(CHAOS_RUN) pytest tests/chaos
 
 check: lint typecheck test

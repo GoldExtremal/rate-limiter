@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "asyncpg>=0.30",
     "fastapi>=0.115",
+    "prometheus-client>=0.21",
     "pydantic-settings>=2.6",
     "redis[hiredis]>=5.2",
     "uvicorn[standard]>=0.32",
@@ -14,6 +15,7 @@ dependencies = [
 dev = [
     "asgi-lifespan>=2.1",
     "asyncpg-stubs>=0.31.3",
+    "docker>=7.1",
     "httpx>=0.28",
     "mypy>=1.13",
     "pytest>=8.3",

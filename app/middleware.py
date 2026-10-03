@@ -9,6 +9,7 @@ from app.limiter import RateLimiter
 from app.schemas import CLIENT_ID_MAX_LENGTH
 
 CLIENT_ID_HEADER = b"x-client-id"
+DEGRADED_HEADER = "X-RateLimit-Degraded"
 
 
 def read_client_id(scope: Scope) -> str | None:
@@ -29,8 +30,19 @@ def rate_limit_headers(decision: Decision) -> dict[str, str]:
         "X-RateLimit-Remaining": decision.remaining,
         "X-RateLimit-Reset": decision.reset_at,
         "Retry-After": decision.retry_after,
+        DEGRADED_HEADER: decision.degraded,
     }
     return {name: str(value) for name, value in values.items() if value is not None}
+
+
+def rejection_response(decision: Decision, headers: dict[str, str]) -> JSONResponse:
+    if decision.degraded is None:
+        return JSONResponse({"detail": "rate limit exceeded"}, status_code=429, headers=headers)
+    return JSONResponse(
+        {"detail": f"rate limiter is degraded: {decision.degraded}"},
+        status_code=503,
+        headers=headers,
+    )
 
 
 class RateLimitMiddleware:
@@ -57,10 +69,7 @@ class RateLimitMiddleware:
         headers = rate_limit_headers(decision)
 
         if not decision.allowed:
-            response = JSONResponse(
-                {"detail": "rate limit exceeded"}, status_code=429, headers=headers
-            )
-            await response(scope, receive, send)
+            await rejection_response(decision, headers)(scope, receive, send)
             return
 
         async def send_with_rate_limit_headers(message: Message) -> None:
