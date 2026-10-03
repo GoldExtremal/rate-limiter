@@ -36,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             Admission(app_settings.redis_max_connections),
             LimitsProvider(app_settings.rate_limit, limits),
             window_sec=app_settings.window_sec,
+            fail_mode_open=app_settings.fail_mode_open,
         )
         try:
             yield

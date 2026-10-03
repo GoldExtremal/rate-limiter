@@ -29,4 +29,5 @@ async def test_check_response_contract(app_client: ClientFactory) -> None:
         response = await client.post("/check", json={"client_id": "contract"})
 
     assert response.status_code == 200
-    assert set(response.json()) == {"allowed", "remaining", "reset_at"}
+    assert set(response.json()) == {"allowed", "remaining", "reset_at", "degraded"}
+    assert response.json()["degraded"] is None

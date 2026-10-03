@@ -20,6 +20,7 @@ async def post_check(client: httpx.AsyncClient, base_url: str, client_id: str) -
 def bodies_of(responses: list[httpx.Response]) -> list[dict[str, Any]]:
     assert all(response.status_code == 200 for response in responses)
     bodies: list[dict[str, Any]] = [response.json() for response in responses]
+    assert all(body["degraded"] is None for body in bodies)
     assert all(body["remaining"] is not None for body in bodies)
     return bodies
 

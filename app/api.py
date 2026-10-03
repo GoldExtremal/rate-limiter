@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, Response
 
 from app.limiter import RateLimiter
+from app.middleware import DEGRADED_HEADER
 from app.schemas import CheckRequest, CheckResponse
 
 router = APIRouter()
@@ -32,8 +33,11 @@ async def check(payload: CheckRequest, request: Request, response: Response) -> 
     decision = await get_limiter(request).check(payload.client_id)
     if decision.retry_after is not None:
         response.headers["Retry-After"] = str(decision.retry_after)
+    if decision.degraded is not None:
+        response.headers[DEGRADED_HEADER] = decision.degraded
     return CheckResponse(
         allowed=decision.allowed,
         remaining=decision.remaining,
         reset_at=decision.reset_at,
+        degraded=decision.degraded,
     )

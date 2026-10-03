@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     limits_query_timeout_ms: int = Field(default=1000, gt=0)
     rate_limit: int = Field(default=100, ge=0)
     window_sec: int = Field(default=60, gt=0)
+    fail_mode_open: bool = True
     redis_timeout_ms: int = Field(default=500, gt=0)
     redis_max_connections: int = Field(default=64, gt=0)
     instance_id: str = Field(default_factory=socket.gethostname, min_length=1)
