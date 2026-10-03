@@ -1,9 +1,11 @@
 import asyncio
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 import asyncpg
+from pydantic import Field, NonNegativeInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
@@ -16,6 +18,7 @@ class MigrationSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     database_url: str = "postgresql://ratelimiter:local-dev-only@postgres:5432/ratelimiter"
+    seed_client_limits: dict[str, NonNegativeInt] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,12 +60,25 @@ async def apply_migrations(
     return newly_applied
 
 
-async def migrate(database_url: str, migrations: list[Migration]) -> list[str]:
+async def seed_client_limits(connection: asyncpg.Connection, limits: Mapping[str, int]) -> None:
+    await connection.executemany(
+        "INSERT INTO client_limits (client_id, rate_limit) VALUES ($1, $2) "
+        "ON CONFLICT (client_id) DO NOTHING",
+        list(limits.items()),
+    )
+
+
+async def migrate(
+    database_url: str, migrations: list[Migration], seed: Mapping[str, int] | None = None
+) -> list[str]:
     connection = await asyncpg.connect(database_url)
     try:
         await connection.execute("SELECT pg_advisory_lock($1)", MIGRATION_LOCK_ID)
         try:
-            return await apply_migrations(connection, migrations)
+            applied = await apply_migrations(connection, migrations)
+            if seed:
+                await seed_client_limits(connection, seed)
+            return applied
         finally:
             await connection.execute("SELECT pg_advisory_unlock($1)", MIGRATION_LOCK_ID)
     finally:
@@ -72,7 +88,9 @@ async def migrate(database_url: str, migrations: list[Migration]) -> list[str]:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     settings = MigrationSettings()
-    applied = asyncio.run(migrate(settings.database_url, load_migrations()))
+    applied = asyncio.run(
+        migrate(settings.database_url, load_migrations(), settings.seed_client_limits)
+    )
     logger.info("migrations applied: %s", ", ".join(applied) or "none")
 
 
