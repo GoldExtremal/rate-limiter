@@ -16,6 +16,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.get("/demo")
+async def demo() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @router.post("/check")
 async def check(payload: CheckRequest, request: Request, response: Response) -> CheckResponse:
     decision = await get_limiter(request).check(payload.client_id)

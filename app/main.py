@@ -10,6 +10,7 @@ from app.api import router
 from app.config import Settings
 from app.instance import InstanceIdASGI
 from app.limiter import RateLimiter
+from app.middleware import RateLimitMiddleware
 from app.redis_pool import create_redis_pool, warm_up_redis
 
 
@@ -42,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Rate Limiter", lifespan=lifespan)
     app.state.settings = app_settings
+    app.add_middleware(RateLimitMiddleware, protected_paths=app_settings.protected_paths)
     app.include_router(router)
     return app
 
