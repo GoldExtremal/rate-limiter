@@ -10,6 +10,7 @@ from app.api import router
 from app.config import Settings
 from app.instance import InstanceIdASGI
 from app.limiter import RateLimiter
+from app.limits import LimitsProvider, load_limits
 from app.middleware import RateLimitMiddleware
 from app.redis_pool import create_redis_pool, warm_up_redis
 
@@ -29,10 +30,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pool = create_redis_pool(app_settings)
         redis = Redis(connection_pool=pool)
         await warm_up_redis(redis, app_settings.redis_timeout_sec)
+        limits = await load_limits(app_settings.database_url, app_settings.limits_query_timeout_sec)
         app.state.limiter = RateLimiter(
             redis,
             Admission(app_settings.redis_max_connections),
-            default_limit=app_settings.rate_limit,
+            LimitsProvider(app_settings.rate_limit, limits),
             window_sec=app_settings.window_sec,
         )
         try:
