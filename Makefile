@@ -11,7 +11,7 @@ up:
 	$(COMPOSE) up -d --build --wait
 
 down:
-	$(COMPOSE) --profile test --profile load down -v --remove-orphans
+	$(COMPOSE) --profile test --profile load --profile monitoring down -v --remove-orphans
 
 test-image:
 	$(COMPOSE) --profile test build tests chaos
