@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
@@ -15,16 +14,10 @@ from app.config import Settings
 from app.instance import InstanceIdASGI
 from app.limiter import RateLimiter
 from app.limits import LimitsProvider, load_limits, refresh_limits_forever
+from app.logs import configure_logging
 from app.metrics import Metrics
 from app.middleware import RateLimitMiddleware
 from app.redis_pool import create_redis_pool, warm_up_redis
-
-
-def configure_logging(settings: Settings) -> None:
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format=f"%(asctime)s %(levelname)s instance={settings.instance_id} %(name)s %(message)s",
-    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -78,5 +71,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def build_asgi_app() -> InstanceIdASGI:
     settings = Settings()
-    configure_logging(settings)
+    configure_logging(settings.log_level, settings.log_format, settings.instance_id)
     return InstanceIdASGI(create_app(settings), settings.instance_id)

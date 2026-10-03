@@ -8,10 +8,12 @@ import asyncpg
 from pydantic import Field, NonNegativeInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.logs import LogFormat, configure_logging
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 MIGRATION_LOCK_ID = 7_340_001
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.migrate")
 
 
 class MigrationSettings(BaseSettings):
@@ -19,6 +21,8 @@ class MigrationSettings(BaseSettings):
 
     database_url: str = "postgresql://ratelimiter:local-dev-only@postgres:5432/ratelimiter"
     seed_client_limits: dict[str, NonNegativeInt] = Field(default_factory=dict)
+    log_level: str = "info"
+    log_format: LogFormat = "json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,12 +90,12 @@ async def migrate(
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     settings = MigrationSettings()
+    configure_logging(settings.log_level, settings.log_format, "migrate")
     applied = asyncio.run(
         migrate(settings.database_url, load_migrations(), settings.seed_client_limits)
     )
-    logger.info("migrations applied: %s", ", ".join(applied) or "none")
+    logger.info("migrations applied", extra={"versions": applied})
 
 
 if __name__ == "__main__":
