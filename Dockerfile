@@ -17,7 +17,7 @@ COPY migrations ./migrations
 RUN useradd --system --uid 10001 --no-create-home app
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "app.main:build_asgi_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--limit-concurrency", "2048"]
+CMD ["uvicorn", "app.main:build_asgi_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--limit-concurrency", "2048", "--timeout-keep-alive", "75"]
 
 FROM base AS test
 RUN uv sync --frozen --no-install-project
