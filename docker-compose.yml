@@ -59,3 +59,13 @@ services:
       app2:
         condition: service_healthy
     restart: unless-stopped
+
+  tests:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    environment:
+      NGINX_URL: http://nginx
+      APP_URLS: http://app1:8000,http://app2:8000
+      TEST_REDIS_URL: redis://redis:6379/15
