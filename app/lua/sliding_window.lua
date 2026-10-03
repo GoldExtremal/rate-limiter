@@ -14,7 +14,9 @@ end
 redis.call('ZREMRANGEBYSCORE', key, '-inf', string.format('(%d', now - window))
 local count = redis.call('ZCARD', key)
 local allowed = 0
-if count < limit then
+if redis.call('ZSCORE', key, member) then
+  allowed = 1
+elseif count < limit then
   redis.call('ZADD', key, now, member)
   count = count + 1
   allowed = 1

@@ -40,7 +40,7 @@ async def demo() -> dict[str, str]:
 
 @router.post("/check")
 async def check(payload: CheckRequest, request: Request, response: Response) -> CheckResponse:
-    decision = await get_limiter(request).check(payload.client_id)
+    decision = await get_limiter(request).check(payload.client_id, payload.request_id)
     if decision.retry_after is not None:
         response.headers["Retry-After"] = str(decision.retry_after)
     if decision.degraded is not None:

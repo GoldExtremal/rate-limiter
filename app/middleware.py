@@ -6,21 +6,28 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.decision import Decision
 from app.limiter import RateLimiter
-from app.schemas import CLIENT_ID_MAX_LENGTH
+from app.schemas import CLIENT_ID_MAX_LENGTH, REQUEST_ID_MAX_LENGTH
 
 CLIENT_ID_HEADER = b"x-client-id"
+REQUEST_ID_HEADER = b"x-request-id"
 DEGRADED_HEADER = "X-RateLimit-Degraded"
 
 
-def read_client_id(scope: Scope) -> str | None:
+class InvalidHeader(Exception):
+    pass
+
+
+def read_header(scope: Scope, header: bytes, max_length: int) -> str | None:
     for name, value in scope["headers"]:
-        if name != CLIENT_ID_HEADER:
+        if name != header:
             continue
         try:
-            client_id: str = value.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-        return client_id if 1 <= len(client_id) <= CLIENT_ID_MAX_LENGTH else None
+            text: str = value.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise InvalidHeader from error
+        if not 1 <= len(text) <= max_length:
+            raise InvalidHeader
+        return text
     return None
 
 
@@ -55,17 +62,23 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        client_id = read_client_id(scope)
+        try:
+            client_id = read_header(scope, CLIENT_ID_HEADER, CLIENT_ID_MAX_LENGTH)
+            request_id = read_header(scope, REQUEST_ID_HEADER, REQUEST_ID_MAX_LENGTH)
+        except InvalidHeader:
+            client_id = None
         if client_id is None:
             response = JSONResponse(
-                {"detail": "X-Client-Id header must be 1-256 UTF-8 characters"},
+                {
+                    "detail": "X-Client-Id must be 1-256 and X-Request-Id 1-128 UTF-8 characters",
+                },
                 status_code=400,
             )
             await response(scope, receive, send)
             return
 
         limiter: RateLimiter = scope["app"].state.limiter
-        decision = await limiter.check(client_id)
+        decision = await limiter.check(client_id, request_id)
         headers = rate_limit_headers(decision)
 
         if not decision.allowed:

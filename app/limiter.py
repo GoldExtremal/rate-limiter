@@ -20,6 +20,8 @@ SCRIPT_PATH = Path(__file__).parent / "lua" / "sliding_window.lua"
 MS_PER_SECOND = 1000
 KEY_PREFIX = "rl:"
 MEMBER_BYTES = 8
+GENERATED_MEMBER_PREFIX = "g:"
+REQUEST_MEMBER_PREFIX = "r:"
 
 REDIS_UNAVAILABLE_ERRORS = (
     RedisConnectionError,
@@ -34,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 def key_for(client_id: str) -> str:
     return f"{KEY_PREFIX}{client_id}"
+
+
+def member_for(request_id: str | None) -> str:
+    if request_id is None:
+        return GENERATED_MEMBER_PREFIX + secrets.token_hex(MEMBER_BYTES)
+    return REQUEST_MEMBER_PREFIX + request_id
 
 
 def ceil_seconds(milliseconds: int) -> int:
@@ -113,18 +121,18 @@ class RateLimiter:
         self._window_ms = window_sec * MS_PER_SECOND
         self._fail_mode_open = fail_mode_open
 
-    async def check(self, client_id: str) -> Decision:
+    async def check(self, client_id: str, request_id: str | None = None) -> Decision:
         started = time.perf_counter()
         limit = self.limits.get(client_id)
         try:
             async with self._admission.slot():
-                decision = await self._check_in_redis(client_id, limit)
+                decision = await self._check_in_redis(client_id, limit, member_for(request_id))
         except AdmissionTimeout:
             decision = overloaded_decision()
         self.metrics.record(decision, time.perf_counter() - started)
         return decision
 
-    async def _check_in_redis(self, client_id: str, limit: int) -> Decision:
+    async def _check_in_redis(self, client_id: str, limit: int, member: str) -> Decision:
         if not self.breaker.allow_request():
             return self.unavailable_decision()
         is_probe = self.breaker.state is BreakerState.HALF_OPEN
@@ -132,7 +140,7 @@ class RateLimiter:
             with self.metrics.redis_duration.time():
                 reply = await self._script(
                     keys=[key_for(client_id)],
-                    args=[limit, self._window_ms, secrets.token_hex(MEMBER_BYTES)],
+                    args=[limit, self._window_ms, member],
                 )
         except REDIS_UNAVAILABLE_ERRORS as error:
             kind = classify_redis_error(error)

@@ -41,6 +41,17 @@ async def test_individual_limit_is_passed_to_script() -> None:
     assert script.calls[0]["args"][:2] == [7, 60_000]
 
 
+async def test_request_id_becomes_member_and_generated_ids_are_namespaced() -> None:
+    script = FakeScript()
+    limiter = build_limiter(script)
+
+    await limiter.check("client", "retry-1")
+    await limiter.check("client")
+
+    assert script.calls[0]["args"][2] == "r:retry-1"
+    assert script.calls[1]["args"][2].startswith("g:")
+
+
 @pytest.mark.parametrize("error", UNAVAILABLE_ERRORS, ids=lambda e: type(e).__name__)
 async def test_fail_open_allows_on_unavailability(error: Exception) -> None:
     script = FakeScript()

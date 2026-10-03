@@ -21,7 +21,7 @@ class FakeLimiter:
         self.decision = decision
         self.checked: list[str] = []
 
-    async def check(self, client_id: str) -> Decision:
+    async def check(self, client_id: str, request_id: str | None = None) -> Decision:
         self.checked.append(client_id)
         return self.decision
 

@@ -1,0 +1,59 @@
+groups:
+  - name: rate-limiter
+    rules:
+      - alert: RateLimiterInstanceDown
+        expr: up{job="rate-limiter"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Инстанс {{ $labels.instance }} не отдаёт метрики"
+
+      - alert: RateLimiterBreakerOpen
+        expr: ratelimit_circuit_breaker_state == 1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Breaker на {{ $labels.instance }} открыт: Redis недоступен, решения деградированные"
+
+      - alert: RateLimiterDegradedDecisions
+        expr: sum by (instance) (rate(ratelimit_decisions_total{outcome=~"degraded_.*"}[1m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} принимает решения без Redis"
+
+      - alert: RateLimiterShedding
+        expr: sum by (instance) (rate(ratelimit_decisions_total{outcome="shed"}[1m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} перегружен и отбрасывает запросы"
+
+      - alert: RateLimiterScriptErrors
+        expr: increase(ratelimit_script_errors_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis отклоняет скрипт на {{ $labels.instance }}: программная ошибка"
+
+      - alert: RateLimiterHighLatency
+        expr: >-
+          histogram_quantile(0.99,
+          sum by (le) (rate(ratelimit_check_duration_seconds_bucket[5m]))) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p99 проверки лимита выше 100 мс"
+
+      - alert: RateLimiterLimitsStale
+        expr: ratelimit_limits_loaded == 0 or ratelimit_limits_snapshot_age_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Лимиты клиентов на {{ $labels.instance }} не обновляются из PostgreSQL"
