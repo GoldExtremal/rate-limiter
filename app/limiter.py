@@ -72,6 +72,17 @@ def overloaded_decision() -> Decision:
     )
 
 
+def timeout_decision() -> Decision:
+    return Decision(
+        allowed=False,
+        limit=None,
+        remaining=None,
+        reset_at=None,
+        retry_after=1,
+        degraded=DegradedReason.REDIS_TIMEOUT,
+    )
+
+
 class RateLimiter:
     def __init__(
         self,
@@ -121,6 +132,8 @@ class RateLimiter:
             self.breaker.record_failure()
             self.metrics.redis_errors.labels(kind).inc()
             logger.warning("redis is unavailable: %s", kind)
+            if kind == "timeout" and self.breaker.state is not BreakerState.OPEN:
+                return timeout_decision()
             return self.unavailable_decision()
         except ResponseError:
             self.metrics.script_errors.inc()

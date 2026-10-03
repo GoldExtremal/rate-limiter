@@ -109,7 +109,10 @@ async def test_hung_redis_is_bounded_by_timeouts(
             bodies.append(response.json())
         health = (await app.get("/health")).json()
 
-    assert all(body["degraded"] == "redis_unavailable" for body in bodies)
+    assert [body["degraded"] for body in bodies[:4]] == ["redis_timeout"] * 4
+    assert all(body["allowed"] is False for body in bodies[:4])
+    assert all(body["degraded"] == "redis_unavailable" for body in bodies[4:])
+    assert all(body["allowed"] is True for body in bodies[4:])
     assert all(duration < 1.0 for duration in durations[:5])
     assert all(duration < 0.1 for duration in durations[5:])
     assert health["breaker"] == "open"
@@ -134,8 +137,8 @@ async def test_hung_redis_overload_is_shed_not_failed_open(
     shed = [body for body in bodies if body["degraded"] == "overloaded"]
     assert all(response.status_code == 200 for response in responses)
     assert len(shed) == 8
-    assert all(body["allowed"] is False for body in shed)
-    assert sum(body["degraded"] == "redis_unavailable" for body in bodies) == 2
+    assert all(body["allowed"] is False for body in bodies)
+    assert sum(body["degraded"] == "redis_timeout" for body in bodies) == 2
 
 
 async def test_out_of_memory_rejects_script_before_execution(

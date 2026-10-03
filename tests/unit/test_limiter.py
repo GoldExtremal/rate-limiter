@@ -13,11 +13,10 @@ from tests.unit.fakes import FakeClock, FakeScript, build_limiter
 UNAVAILABLE_ERRORS = [
     RedisConnectionError("refused"),
     BusyLoadingError("loading"),
-    RedisTimeoutError("timeout"),
-    TimeoutError(),
     OutOfMemoryError("OOM command not allowed"),
     ReadOnlyError("READONLY"),
 ]
+TIMEOUT_ERRORS = [RedisTimeoutError("timeout"), TimeoutError()]
 
 
 async def test_script_reply_becomes_decision() -> None:
@@ -64,6 +63,34 @@ async def test_fail_closed_rejects_only_as_degraded(error: Exception) -> None:
     assert decision.allowed is False
     assert decision.degraded is DegradedReason.REDIS_UNAVAILABLE
     assert decision.retry_after is None
+
+
+@pytest.mark.parametrize("fail_mode_open", [True, False])
+@pytest.mark.parametrize("error", TIMEOUT_ERRORS, ids=lambda e: type(e).__name__)
+async def test_single_timeout_is_rejected_not_failed_open(
+    error: Exception, fail_mode_open: bool
+) -> None:
+    script = FakeScript()
+    script.error = error
+
+    decision = await build_limiter(script, fail_mode_open=fail_mode_open).check("client")
+
+    assert decision.allowed is False
+    assert decision.degraded is DegradedReason.REDIS_TIMEOUT
+    assert decision.retry_after == 1
+
+
+async def test_consecutive_timeouts_open_breaker_and_then_fail_open() -> None:
+    script = FakeScript()
+    script.error = RedisTimeoutError("timeout")
+    breaker = CircuitBreaker(failure_threshold=3, cooldown_sec=5)
+    limiter = build_limiter(script, breaker=breaker, fail_mode_open=True)
+
+    decisions = [await limiter.check("client") for _ in range(5)]
+
+    assert [d.degraded for d in decisions[:2]] == [DegradedReason.REDIS_TIMEOUT] * 2
+    assert all(d.degraded is DegradedReason.REDIS_UNAVAILABLE for d in decisions[2:])
+    assert all(d.allowed for d in decisions[2:])
 
 
 async def test_script_error_propagates_and_does_not_touch_breaker() -> None:
