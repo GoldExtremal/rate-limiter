@@ -2,6 +2,7 @@ import logging
 import secrets
 import time
 from collections.abc import Sequence
+from functools import partial
 from pathlib import Path
 
 from redis.asyncio import Redis
@@ -61,6 +62,11 @@ def decision_from_script(limit: int, reply: Sequence[int]) -> Decision:
     )
 
 
+def snapshot_age_or_never(limits: LimitsProvider) -> float:
+    age = limits.snapshot_age_sec()
+    return -1.0 if age is None else age
+
+
 def overloaded_decision() -> Decision:
     return Decision(
         allowed=False,
@@ -102,7 +108,8 @@ class RateLimiter:
         self.metrics = metrics
         metrics.breaker_state.set_function(lambda: float(breaker.state))
         metrics.inflight_checks.set_function(lambda: float(admission.in_use))
-        metrics.limits_loaded.set(1 if limits.loaded else 0)
+        metrics.limits_loaded.set_function(lambda: 1.0 if limits.loaded else 0.0)
+        metrics.limits_snapshot_age.set_function(partial(snapshot_age_or_never, limits))
         self._window_ms = window_sec * MS_PER_SECOND
         self._fail_mode_open = fail_mode_open
 

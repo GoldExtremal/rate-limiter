@@ -1,6 +1,9 @@
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import FastAPI
 from redis.asyncio import Redis
@@ -11,7 +14,7 @@ from app.breaker import CircuitBreaker
 from app.config import Settings
 from app.instance import InstanceIdASGI
 from app.limiter import RateLimiter
-from app.limits import LimitsProvider, load_limits
+from app.limits import LimitsProvider, load_limits, refresh_limits_forever
 from app.metrics import Metrics
 from app.middleware import RateLimitMiddleware
 from app.redis_pool import create_redis_pool, warm_up_redis
@@ -32,11 +35,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pool = create_redis_pool(app_settings)
         redis = Redis(connection_pool=pool)
         await warm_up_redis(redis, app_settings.redis_timeout_sec)
-        limits = await load_limits(app_settings.database_url, app_settings.limits_query_timeout_sec)
+        load = partial(
+            load_limits, app_settings.database_url, app_settings.limits_query_timeout_sec
+        )
+        limits = LimitsProvider(app_settings.rate_limit, await load())
+        metrics = Metrics()
         app.state.limiter = RateLimiter(
             redis,
             Admission(app_settings.redis_max_connections, app_settings.redis_queue_timeout_sec),
-            LimitsProvider(app_settings.rate_limit, limits),
+            limits,
             CircuitBreaker(
                 app_settings.breaker_failure_threshold,
                 app_settings.breaker_cooldown_sec,
@@ -44,13 +51,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 min_calls=app_settings.breaker_min_calls,
                 failure_ratio=app_settings.breaker_failure_ratio,
             ),
-            Metrics(),
+            metrics,
             window_sec=app_settings.window_sec,
             fail_mode_open=app_settings.fail_mode_open,
+        )
+        refresh = asyncio.create_task(
+            refresh_limits_forever(
+                limits, load, app_settings.limits_refresh_sec, metrics.limits_refresh_errors.inc
+            )
         )
         try:
             yield
         finally:
+            refresh.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await refresh
             await redis.aclose()
             await pool.aclose()
 

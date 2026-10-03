@@ -1,25 +1,47 @@
 import asyncio
 import logging
-from collections.abc import Mapping
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from types import MappingProxyType
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
 
+LimitsLoader = Callable[[], Awaitable[dict[str, int] | None]]
+
 
 class LimitsProvider:
-    def __init__(self, default_limit: int, limits: Mapping[str, int] | None) -> None:
+    def __init__(
+        self,
+        default_limit: int,
+        limits: Mapping[str, int] | None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._default_limit = default_limit
-        self._limits: Mapping[str, int] = MappingProxyType(dict(limits or {}))
-        self.loaded = limits is not None
+        self._clock = clock
+        self._limits: Mapping[str, int] = MappingProxyType({})
+        self._loaded_at: float | None = None
+        if limits is not None:
+            self.replace(limits)
 
-    def get(self, client_id: str) -> int:
-        return self._limits.get(client_id, self._default_limit)
+    @property
+    def loaded(self) -> bool:
+        return self._loaded_at is not None
 
     @property
     def count(self) -> int:
         return len(self._limits)
+
+    def get(self, client_id: str) -> int:
+        return self._limits.get(client_id, self._default_limit)
+
+    def replace(self, limits: Mapping[str, int]) -> None:
+        self._limits = MappingProxyType(dict(limits))
+        self._loaded_at = self._clock()
+
+    def snapshot_age_sec(self) -> float | None:
+        return None if self._loaded_at is None else self._clock() - self._loaded_at
 
 
 async def fetch_limits(database_url: str) -> dict[str, int]:
@@ -36,5 +58,20 @@ async def load_limits(database_url: str, timeout_sec: float) -> dict[str, int] |
         async with asyncio.timeout(timeout_sec):
             return await fetch_limits(database_url)
     except (OSError, TimeoutError, asyncpg.PostgresError, asyncpg.InterfaceError) as error:
-        logger.warning("client limits are unavailable, using defaults: %s", type(error).__name__)
+        logger.warning("client limits are unavailable: %s", type(error).__name__)
         return None
+
+
+async def refresh_limits_forever(
+    provider: LimitsProvider,
+    load: LimitsLoader,
+    interval_sec: float,
+    on_failure: Callable[[], None],
+) -> None:
+    while True:
+        await asyncio.sleep(interval_sec)
+        limits = await load()
+        if limits is None:
+            on_failure()
+        else:
+            provider.replace(limits)
