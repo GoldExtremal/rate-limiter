@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 
 from app.admission import Admission
 from app.decision import Decision
+from app.limits import LimitsProvider
 
 SCRIPT_PATH = Path(__file__).parent / "lua" / "sliding_window.lua"
 MS_PER_SECOND = 1000
@@ -38,20 +39,17 @@ class RateLimiter:
         self,
         redis: Redis,
         admission: Admission,
+        limits: LimitsProvider,
         *,
-        default_limit: int,
         window_sec: int,
     ) -> None:
         self._script = redis.register_script(SCRIPT_PATH.read_text())
         self._admission = admission
-        self._default_limit = default_limit
+        self.limits = limits
         self._window_ms = window_sec * MS_PER_SECOND
 
-    def limit_for(self, client_id: str) -> int:
-        return self._default_limit
-
     async def check(self, client_id: str) -> Decision:
-        limit = self.limit_for(client_id)
+        limit = self.limits.get(client_id)
         async with self._admission.slot():
             reply = await self._script(
                 keys=[key_for(client_id)],
