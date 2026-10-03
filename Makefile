@@ -20,7 +20,7 @@ lint: test-image
 	$(TEST_RUN) sh -c "ruff check . && ruff format --check ."
 
 lint-monitoring:
-	docker run --rm -v "$(CURDIR)/monitoring:/monitoring:ro" --entrypoint promtool prom/prometheus:v3.5.0 \
+	docker run --rm -v "$(CURDIR)/monitoring:/monitoring:ro" --entrypoint promtool prom/prometheus:v3.15.0 \
 		check rules /monitoring/alerts.yml
 
 typecheck: test-image
