@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.limiter import RateLimiter
 from app.middleware import DEGRADED_HEADER
@@ -23,6 +24,12 @@ async def health(request: Request) -> dict[str, object]:
         "limits_loaded": limits.loaded,
         "limits_count": limits.count,
     }
+
+
+@router.get("/metrics")
+async def metrics(request: Request) -> Response:
+    registry = get_limiter(request).metrics.registry
+    return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.get("/demo")

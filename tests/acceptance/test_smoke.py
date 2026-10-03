@@ -17,3 +17,13 @@ async def test_each_instance_is_reachable_directly() -> None:
 
     instance_ids = [response.headers["X-Instance-Id"] for response in responses]
     assert instance_ids == ["app1", "app2"]
+
+
+async def test_metrics_are_private_to_instances() -> None:
+    async with httpx.AsyncClient() as client:
+        through_balancer = await client.get(f"{NGINX_URL}/metrics")
+        direct = await client.get(f"{APP_URLS[0]}/metrics")
+
+    assert through_balancer.status_code == 404
+    assert direct.status_code == 200
+    assert "ratelimit_decisions_total" in direct.text

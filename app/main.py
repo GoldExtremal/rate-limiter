@@ -12,6 +12,7 @@ from app.config import Settings
 from app.instance import InstanceIdASGI
 from app.limiter import RateLimiter
 from app.limits import LimitsProvider, load_limits
+from app.metrics import Metrics
 from app.middleware import RateLimitMiddleware
 from app.redis_pool import create_redis_pool, warm_up_redis
 
@@ -39,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             CircuitBreaker(
                 app_settings.breaker_failure_threshold, app_settings.breaker_cooldown_sec
             ),
+            Metrics(),
             window_sec=app_settings.window_sec,
             fail_mode_open=app_settings.fail_mode_open,
         )

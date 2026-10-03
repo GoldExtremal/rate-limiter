@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "asyncpg>=0.30",
     "fastapi>=0.115",
+    "prometheus-client>=0.21",
     "pydantic-settings>=2.6",
     "redis[hiredis]>=5.2",
     "uvicorn[standard]>=0.32",

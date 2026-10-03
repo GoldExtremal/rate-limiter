@@ -8,6 +8,7 @@ from app.admission import Admission
 from app.breaker import CircuitBreaker
 from app.limiter import RateLimiter
 from app.limits import LimitsProvider
+from app.metrics import Metrics
 
 
 class FakeClock:
@@ -58,6 +59,7 @@ def build_limiter(
         admission or Admission(slots=4, timeout_sec=1),
         LimitsProvider(10, limits),
         breaker or CircuitBreaker(failure_threshold=5, cooldown_sec=5),
+        Metrics(),
         window_sec=60,
         fail_mode_open=fail_mode_open,
     )
