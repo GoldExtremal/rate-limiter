@@ -2,8 +2,9 @@ COMPOSE ?= docker compose
 TEST_RUN = $(COMPOSE) --profile test run --rm tests
 CHAOS_RUN = $(COMPOSE) --profile test run --rm chaos
 ACCEPTANCE_RUNS ?= 10
+LOAD_STATS_DELAY ?= 90
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -40,3 +41,11 @@ test: test-image up
 	$(CHAOS_RUN) pytest tests/chaos
 
 check: lint typecheck test
+
+load: up
+	mkdir -p load/reports
+	$(COMPOSE) --profile load run --rm locust & \
+	sleep $(LOAD_STATS_DELAY); \
+	docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep -E "NAME|rate-limiter" > load/reports/docker-stats.txt; \
+	wait
+	cat load/reports/docker-stats.txt load/reports/app-metrics.txt

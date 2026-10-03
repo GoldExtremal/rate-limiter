@@ -4,6 +4,7 @@ from enum import StrEnum
 
 class DegradedReason(StrEnum):
     REDIS_UNAVAILABLE = "redis_unavailable"
+    REDIS_TIMEOUT = "redis_timeout"
     OVERLOADED = "overloaded"
 
 
