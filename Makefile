@@ -37,7 +37,7 @@ test-chaos: test-image up
 	$(CHAOS_RUN) pytest tests/chaos
 
 test: test-image up
-	$(TEST_RUN) pytest tests/unit tests/integration tests/acceptance
+	$(TEST_RUN) pytest --cov --cov-report=term tests/unit tests/integration tests/acceptance
 	$(CHAOS_RUN) pytest tests/chaos
 
 check: lint typecheck test
