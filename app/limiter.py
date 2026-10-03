@@ -9,6 +9,7 @@ from redis.exceptions import OutOfMemoryError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.admission import Admission, AdmissionTimeout
+from app.breaker import BreakerState, CircuitBreaker
 from app.decision import Decision, DegradedReason
 from app.limits import LimitsProvider
 
@@ -75,6 +76,7 @@ class RateLimiter:
         redis: Redis,
         admission: Admission,
         limits: LimitsProvider,
+        breaker: CircuitBreaker,
         *,
         window_sec: int,
         fail_mode_open: bool,
@@ -82,6 +84,7 @@ class RateLimiter:
         self._script = redis.register_script(SCRIPT_PATH.read_text())
         self._admission = admission
         self.limits = limits
+        self.breaker = breaker
         self._window_ms = window_sec * MS_PER_SECOND
         self._fail_mode_open = fail_mode_open
 
@@ -94,14 +97,23 @@ class RateLimiter:
             return overloaded_decision()
 
     async def _check_in_redis(self, client_id: str, limit: int) -> Decision:
+        if not self.breaker.allow_request():
+            return self.unavailable_decision()
+        is_probe = self.breaker.state is BreakerState.HALF_OPEN
         try:
             reply = await self._script(
                 keys=[key_for(client_id)],
                 args=[limit, self._window_ms, secrets.token_hex(MEMBER_BYTES)],
             )
         except REDIS_UNAVAILABLE_ERRORS as error:
+            self.breaker.record_failure()
             logger.warning("redis is unavailable: %s", classify_redis_error(error))
             return self.unavailable_decision()
+        except BaseException:
+            if is_probe:
+                self.breaker.release_probe()
+            raise
+        self.breaker.record_success()
         return decision_from_script(limit, reply)
 
     def unavailable_decision(self) -> Decision:
@@ -110,6 +122,6 @@ class RateLimiter:
             limit=None,
             remaining=None,
             reset_at=None,
-            retry_after=None,
+            retry_after=None if self._fail_mode_open else self.breaker.retry_after(),
             degraded=DegradedReason.REDIS_UNAVAILABLE,
         )

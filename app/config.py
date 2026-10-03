@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     redis_timeout_ms: int = Field(default=500, gt=0)
     redis_max_connections: int = Field(default=64, gt=0)
     redis_queue_timeout_ms: int = Field(default=1000, gt=0)
+    breaker_failure_threshold: int = Field(default=5, gt=0)
+    breaker_cooldown_sec: float = Field(default=5, gt=0)
     instance_id: str = Field(default_factory=socket.gethostname, min_length=1)
     protected_paths: list[str] = Field(default_factory=lambda: ["/demo"])
     log_level: str = "info"

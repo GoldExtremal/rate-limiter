@@ -14,10 +14,12 @@ def get_limiter(request: Request) -> RateLimiter:
 
 @router.get("/health")
 async def health(request: Request) -> dict[str, object]:
-    limits = get_limiter(request).limits
+    limiter = get_limiter(request)
+    limits = limiter.limits
     return {
         "status": "ok",
         "instance": request.app.state.settings.instance_id,
+        "breaker": limiter.breaker.state.name.lower(),
         "limits_loaded": limits.loaded,
         "limits_count": limits.count,
     }
