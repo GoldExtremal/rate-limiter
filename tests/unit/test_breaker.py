@@ -100,3 +100,67 @@ def test_released_probe_can_be_taken_again() -> None:
     breaker.release_probe()
 
     assert breaker.allow_request() is True
+
+
+def ratio_breaker(clock: FakeClock) -> CircuitBreaker:
+    return CircuitBreaker(
+        failure_threshold=3,
+        cooldown_sec=5,
+        window_sec=10,
+        min_calls=10,
+        failure_ratio=0.5,
+        clock=clock,
+    )
+
+
+def test_timeouts_do_not_trip_consecutive_rule() -> None:
+    breaker = ratio_breaker(FakeClock())
+    for _ in range(9):
+        breaker.record_failure(definite=False)
+
+    assert breaker.state is BreakerState.CLOSED
+
+
+def test_timeouts_open_breaker_by_failure_ratio() -> None:
+    breaker = ratio_breaker(FakeClock())
+    for _ in range(5):
+        breaker.record_success()
+    for _ in range(5):
+        breaker.record_failure(definite=False)
+
+    assert breaker.state is BreakerState.OPEN
+
+
+def test_sporadic_timeouts_under_load_keep_breaker_closed() -> None:
+    clock = FakeClock()
+    breaker = ratio_breaker(clock)
+    for _ in range(200):
+        for _ in range(3):
+            breaker.record_success()
+        breaker.record_failure(definite=False)
+        clock.advance(0.05)
+
+    assert breaker.state is BreakerState.CLOSED
+
+
+def test_failures_outside_window_are_forgotten() -> None:
+    clock = FakeClock()
+    breaker = ratio_breaker(clock)
+    for _ in range(9):
+        breaker.record_failure(definite=False)
+    clock.advance(11)
+    for _ in range(9):
+        breaker.record_success()
+    breaker.record_failure(definite=False)
+
+    assert breaker.state is BreakerState.CLOSED
+
+
+def test_definite_failures_open_breaker_even_at_low_traffic() -> None:
+    clock = FakeClock()
+    breaker = ratio_breaker(clock)
+    for _ in range(3):
+        breaker.record_failure(definite=True)
+        clock.advance(60)
+
+    assert breaker.state is BreakerState.OPEN

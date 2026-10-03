@@ -98,7 +98,7 @@ async def test_hung_redis_is_bounded_by_timeouts(
     redis_chaos: Container, in_process_app: InProcessFactory
 ) -> None:
     async with in_process_app(
-        fail_mode_open=True, redis_timeout_ms=300, breaker_cooldown_sec=30
+        fail_mode_open=True, redis_timeout_ms=300, breaker_cooldown_sec=30, breaker_min_calls=5
     ) as app:
         redis_chaos.pause()
         durations, bodies = [], []

@@ -38,7 +38,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             Admission(app_settings.redis_max_connections, app_settings.redis_queue_timeout_sec),
             LimitsProvider(app_settings.rate_limit, limits),
             CircuitBreaker(
-                app_settings.breaker_failure_threshold, app_settings.breaker_cooldown_sec
+                app_settings.breaker_failure_threshold,
+                app_settings.breaker_cooldown_sec,
+                window_sec=app_settings.breaker_window_sec,
+                min_calls=app_settings.breaker_min_calls,
+                failure_ratio=app_settings.breaker_failure_ratio,
             ),
             Metrics(),
             window_sec=app_settings.window_sec,

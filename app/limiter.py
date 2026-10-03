@@ -129,7 +129,7 @@ class RateLimiter:
                 )
         except REDIS_UNAVAILABLE_ERRORS as error:
             kind = classify_redis_error(error)
-            self.breaker.record_failure()
+            self.breaker.record_failure(definite=kind != "timeout")
             self.metrics.redis_errors.labels(kind).inc()
             logger.warning("redis is unavailable: %s", kind)
             if kind == "timeout" and self.breaker.state is not BreakerState.OPEN:
