@@ -1,10 +1,11 @@
 COMPOSE ?= docker compose
 TEST_RUN = $(COMPOSE) --profile test run --rm tests
 CHAOS_RUN = $(COMPOSE) --profile test run --rm chaos
+LOAD_COMPOSE = $(COMPOSE) -f docker-compose.yml -f compose.load.yml
 ACCEPTANCE_RUNS ?= 10
 LOAD_STATS_DELAY ?= 90
 
-.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load load-saturation
+.PHONY: up down test-image lint typecheck test-unit test-integration test-acceptance test-acceptance-repeat test-chaos test check load-up load load-saturation
 
 up:
 	$(COMPOSE) up -d --build --wait
@@ -42,16 +43,19 @@ test: test-image up
 
 check: lint typecheck test
 
-load: up
+load-up:
+	$(LOAD_COMPOSE) up -d --build --wait
+
+load: load-up
 	mkdir -p load/reports
-	$(COMPOSE) --profile load run --rm locust & \
+	$(LOAD_COMPOSE) --profile load run --rm locust & \
 	sleep $(LOAD_STATS_DELAY); \
 	docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep -E "NAME|rate-limiter" > load/reports/docker-stats.txt; \
 	wait
 	cat load/reports/docker-stats.txt load/reports/app-metrics.txt
 
-load-saturation: up
+load-saturation: load-up
 	mkdir -p load/reports
-	$(COMPOSE) --profile load run --rm locust -f saturation.py --headless --host=http://nginx \
-		--processes=-1 --csv=reports/saturation --only-summary
+	$(LOAD_COMPOSE) --profile load run --rm locust -f saturation.py --headless --host=http://nginx \
+		--processes=4 --csv=reports/saturation --only-summary
 	cat load/reports/saturation.txt

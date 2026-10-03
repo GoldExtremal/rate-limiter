@@ -154,7 +154,8 @@ services:
       - --spawn-rate=${LOAD_SPAWN_RATE:-5}
       - --run-time=${LOAD_RUN_TIME:-150s}
       - --reset-stats
-      - --processes=-1
+      - --processes=${LOAD_PROCESSES:-4}
       - --csv=reports/locust
       - --html=reports/locust.html
       - --only-summary
+
