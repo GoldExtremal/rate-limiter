@@ -90,7 +90,7 @@ services:
       - "127.0.0.1:${APP2_PORT:-8002}:8000"
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.31-alpine
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
