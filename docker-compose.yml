@@ -141,7 +141,7 @@ services:
 
   locust:
     profiles: ["load"]
-    image: locustio/locust:2.46.6
+    image: locustio/locust:2.46.7
     working_dir: /mnt/locust
     volumes:
       - ./load:/mnt/locust
