@@ -172,7 +172,7 @@ services:
 
   grafana:
     profiles: ["monitoring"]
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.4
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-local-dev-only}
       GF_AUTH_ANONYMOUS_ENABLED: "true"
